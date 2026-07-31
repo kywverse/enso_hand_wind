@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b5e75" />
+  <meta name="description" content="MediaPipe 손 추적을 활용해 무역풍, 해수면, 수온 약층, 용승, 기압과 강수의 변화를 탐구하는 ENSO 학습 웹앱" />
+  <title>ENSO Hand Wind Lab</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">2022 개정 교육과정 · 지구과학 [12지구01-05]</p>
+      <h1>ENSO Hand Wind Lab</h1>
+      <p class="subtitle">손으로 무역풍을 바꾸며 엘니뇨·라니냐의 해양–대기 상호작용을 탐구하세요.</p>
+    </div>
+    <div class="header-badges" aria-label="앱 특징">
+      <span>브라우저 안에서 처리</span>
+      <span>설치·로그인 없음</span>
+      <span>GitHub Pages 지원</span>
+    </div>
+  </header>
+
+  <main id="main-content" class="app-shell">
+    <section class="how-to card" aria-labelledby="how-to-title">
+      <div>
+        <p class="section-kicker">손동작 규칙</p>
+        <h2 id="how-to-title">화면의 한쪽에서 손을 좌우로 흔드세요</h2>
+      </div>
+      <div class="gesture-rules">
+        <article class="rule rule-left">
+          <span class="rule-icon" aria-hidden="true">🖐️</span>
+          <div>
+            <strong>왼쪽 구역에서 부채질</strong>
+            <p>서태평양 → 동태평양의 <b>서풍 편차</b>가 생겨 엘니뇨 방향으로 변합니다.</p>
+          </div>
+          <span class="direction-arrow" aria-label="왼쪽에서 오른쪽">→</span>
+        </article>
+        <article class="rule rule-right">
+          <span class="direction-arrow" aria-label="오른쪽에서 왼쪽">←</span>
+          <span class="rule-icon" aria-hidden="true">🖐️</span>
+          <div>
+            <strong>오른쪽 구역에서 부채질</strong>
+            <p>동태평양 → 서태평양의 <b>무역풍</b>이 강해져 라니냐 방향으로 변합니다.</p>
+          </div>
+        </article>
+      </div>
+      <p class="microcopy">손을 더 빠르게 왕복할수록 바람이 강해집니다. 카메라 화면은 거울처럼 좌우 반전되어 보입니다.</p>
+    </section>
+
+    <section class="workspace" aria-label="손 추적과 ENSO 시뮬레이션">
+      <article class="camera-card card">
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">입력</p>
+            <h2>손 부채질 감지</h2>
+          </div>
+          <span id="cameraBadge" class="status-badge status-idle">대기 중</span>
+        </div>
+
+        <div id="cameraStage" class="camera-stage" aria-label="카메라 미리보기">
+          <video id="webcam" autoplay muted playsinline></video>
+          <canvas id="handCanvas" aria-hidden="true"></canvas>
+          <div class="camera-zone zone-left" aria-hidden="true"><span>왼쪽 구역<br />서풍 편차 →</span></div>
+          <div class="camera-zone zone-center" aria-hidden="true"><span>중앙<br />대기 구역</span></div>
+          <div class="camera-zone zone-right" aria-hidden="true"><span>오른쪽 구역<br />← 무역풍</span></div>
+          <div id="cameraPlaceholder" class="camera-placeholder">
+            <span class="placeholder-icon" aria-hidden="true">📷</span>
+            <strong>카메라를 시작하거나 수동 모드를 사용하세요.</strong>
+            <small>영상은 서버로 전송되지 않고 현재 브라우저에서만 처리됩니다.</small>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button id="startCameraBtn" class="btn btn-primary" type="button">카메라 시작</button>
+          <button id="stopCameraBtn" class="btn btn-secondary" type="button" disabled>카메라 중지</button>
+          <button id="resetBtn" class="btn btn-ghost" type="button">중립으로 초기화</button>
+        </div>
+        <p id="cameraStatus" class="status-message" role="status" aria-live="polite">수동 모드는 카메라 없이도 바로 사용할 수 있습니다.</p>
+
+        <div class="input-tabs" role="group" aria-label="입력 모드 선택">
+          <button id="cameraModeBtn" class="mode-tab is-active" type="button" aria-pressed="true">손 추적 모드</button>
+          <button id="manualModeBtn" class="mode-tab" type="button" aria-pressed="false">수동 모드</button>
+        </div>
+
+        <div id="cameraControls" class="mode-controls">
+          <label for="sensitivityRange">
+            <span>부채질 민감도</span>
+            <output id="sensitivityOutput" for="sensitivityRange">보통</output>
+          </label>
+          <input id="sensitivityRange" type="range" min="0.65" max="1.55" step="0.05" value="1" />
+
+          <label for="responseRange">
+            <span>해양 반응 속도</span>
+            <output id="responseOutput" for="responseRange">수업용</output>
+          </label>
+          <input id="responseRange" type="range" min="0.7" max="4" step="0.1" value="1.8" />
+        </div>
+
+        <div id="manualControls" class="mode-controls" hidden>
+          <label for="manualWindRange">
+            <span>바람 방향과 세기</span>
+            <output id="manualWindOutput" for="manualWindRange">보통 무역풍</output>
+          </label>
+          <input id="manualWindRange" type="range" min="-1" max="1" step="0.01" value="-0.32" />
+          <div class="preset-row" aria-label="대표 상태 빠른 설정">
+            <button class="preset-btn" type="button" data-preset="lanina">라니냐</button>
+            <button class="preset-btn" type="button" data-preset="neutral">중립</button>
+            <button class="preset-btn" type="button" data-preset="elnino">엘니뇨</button>
+          </div>
+        </div>
+
+        <dl class="live-metrics">
+          <div>
+            <dt>활성 구역</dt>
+            <dd id="activeZoneValue">없음</dd>
+          </div>
+          <div>
+            <dt>부채질 세기</dt>
+            <dd><span id="fanStrengthValue">0</span>%</dd>
+          </div>
+          <div>
+            <dt>현재 바람</dt>
+            <dd id="windValue">동→서 · 보통</dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="simulation-card card">
+        <div class="card-heading simulation-heading">
+          <div>
+            <p class="section-kicker">결과</p>
+            <h2>적도 태평양 단면 모형</h2>
+          </div>
+          <div id="ensoBadge" class="enso-badge enso-neutral">
+            <span id="ensoStateLabel">중립</span>
+            <small id="ensoIndexLabel">모형 지수 0.00</small>
+          </div>
+        </div>
+
+        <div class="simulation-wrap">
+          <canvas id="oceanCanvas" aria-label="무역풍 변화에 따른 적도 태평양 해양과 대기 단면 시뮬레이션"></canvas>
+          <div class="canvas-legend" aria-hidden="true">
+            <span><i class="legend-warm"></i>따뜻한 표층수</span>
+            <span><i class="legend-cold"></i>차가운 심층수</span>
+            <span><i class="legend-line"></i>수온 약층</span>
+          </div>
+        </div>
+
+        <div id="stateExplanation" class="state-explanation" aria-live="polite">
+          평상시 무역풍이 따뜻한 표층수를 서쪽으로 이동시켜 서태평양의 해수면과 수온 약층이 더 높고 깊게 나타납니다.
+        </div>
+
+        <div class="causal-chain" aria-label="인과 관계 흐름">
+          <span id="chainWind">무역풍 보통</span><b>→</b>
+          <span id="chainSea">해수면 경사 유지</span><b>→</b>
+          <span id="chainThermo">동쪽 약층 얕음</span><b>→</b>
+          <span id="chainSst">동쪽 표층수 차가움</span><b>→</b>
+          <span id="chainWeather">비는 서쪽에 집중</span>
+        </div>
+      </article>
+    </section>
+
+    <section class="variables-section" aria-labelledby="variables-title">
+      <div class="section-heading-row">
+        <div>
+          <p class="section-kicker">관찰값</p>
+          <h2 id="variables-title">같이 변하는 해양·대기 요소</h2>
+        </div>
+        <p>수치는 실제 관측값을 재현하는 예보가 아니라, 방향과 상대적 크기를 비교하기 위한 <b>개념 모형값</b>입니다.</p>
+      </div>
+
+      <div class="variable-grid">
+        <article class="variable-card">
+          <span class="variable-icon" aria-hidden="true">🌊</span>
+          <div>
+            <h3>서–동 해수면 높이 차</h3>
+            <strong id="seaLevelValue">서쪽이 약 35 cm 높음</strong>
+            <p id="seaLevelHint">따뜻한 표층수가 서쪽에 쌓입니다.</p>
+          </div>
+        </article>
+        <article class="variable-card">
+          <span class="variable-icon" aria-hidden="true">🌡️</span>
+          <div>
+            <h3>동태평양 표층 수온 편차</h3>
+            <strong id="sstValue">0.0 ℃</strong>
+            <p id="sstHint">평년과 비슷한 상태입니다.</p>
+          </div>
+        </article>
+        <article class="variable-card">
+          <span class="variable-icon" aria-hidden="true">↕️</span>
+          <div>
+            <h3>동태평양 수온 약층 깊이</h3>
+            <strong id="thermoclineValue">약 80 m</strong>
+            <p id="thermoclineHint">차가운 물이 표층 가까이에 있습니다.</p>
+          </div>
+        </article>
+        <article class="variable-card">
+          <span class="variable-icon" aria-hidden="true">⬆️</span>
+          <div>
+            <h3>동태평양 용승 세기</h3>
+            <strong id="upwellingValue">65%</strong>
+            <p id="upwellingHint">비교적 강한 용승이 유지됩니다.</p>
+          </div>
+        </article>
+        <article class="variable-card">
+          <span class="variable-icon" aria-hidden="true">🌀</span>
+          <div>
+            <h3>해면 기압 배치</h3>
+            <strong id="pressureValue">서쪽 저기압 · 동쪽 고기압</strong>
+            <p id="pressureHint">동서 기압 차가 무역풍을 유지합니다.</p>
+          </div>
+        </article>
+        <article class="variable-card">
+          <span class="variable-icon" aria-hidden="true">🌧️</span>
+          <div>
+            <h3>대류와 강수 중심</h3>
+            <strong id="rainValue">서태평양</strong>
+            <p id="rainHint">따뜻한 바다 위에서 상승기류와 비가 강합니다.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="inquiry-grid" aria-label="수업 활용과 관찰 기록">
+      <article class="inquiry-card card">
+        <p class="section-kicker">질문 기반 탐구</p>
+        <h2>학생 활동 순서</h2>
+        <ol>
+          <li><b>예측:</b> 무역풍이 강해지면 동태평양의 수온 약층과 수온은 어떻게 될까?</li>
+          <li><b>조작:</b> 오른쪽에서 느리게, 빠르게 부채질하며 변인을 비교한다.</li>
+          <li><b>반대 실험:</b> 왼쪽에서 부채질해 서풍 편차를 만들고 강수 중심의 이동을 관찰한다.</li>
+          <li><b>설명:</b> “바람 → 해수 이동 → 수온 약층 → 용승·수온 → 기압·강수” 순서로 근거를 연결한다.</li>
+        </ol>
+        <div class="prompt-box">
+          <strong>핵심 발문</strong>
+          <p>“수온이 먼저 변해서 바람이 바뀐 것일까, 바람이 먼저 바뀌어 수온이 변한 것일까? 실제 ENSO에서는 두 과정이 어떻게 서로를 강화할까?”</p>
+        </div>
+      </article>
+
+      <article class="records-card card">
+        <div class="card-heading">
+          <div>
+            <p class="section-kicker">탐구 기록</p>
+            <h2>현재 상태 저장</h2>
+          </div>
+          <button id="recordBtn" class="btn btn-primary btn-small" type="button">관찰값 기록</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">번호</th>
+                <th scope="col">상태</th>
+                <th scope="col">바람</th>
+                <th scope="col">동태평양 수온 편차</th>
+                <th scope="col">약층 깊이</th>
+                <th scope="col">용승</th>
+              </tr>
+            </thead>
+            <tbody id="recordsBody">
+              <tr class="empty-row"><td colspan="6">아직 기록이 없습니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="button-row record-actions">
+          <button id="downloadCsvBtn" class="btn btn-secondary btn-small" type="button" disabled>CSV 내려받기</button>
+          <button id="clearRecordsBtn" class="btn btn-ghost btn-small" type="button" disabled>기록 지우기</button>
+        </div>
+      </article>
+    </section>
+
+    <details class="model-note card">
+      <summary>이 모형에서 단순화한 점과 수업 시 주의할 점</summary>
+      <div>
+        <p>이 웹앱은 학생이 원인–결과의 방향을 빠르게 확인하도록 무역풍을 독립 변인처럼 조작합니다. 실제 ENSO는 해양과 대기가 서로 영향을 주는 결합 시스템이며, 적도 켈빈파·로스비파, 계절성, 해양 열함량, 대기 변동 등이 함께 작용합니다.</p>
+        <p>또한 ‘손을 왼쪽에서 흔들면 곧바로 엘니뇨가 발생한다’는 뜻이 아닙니다. 화면의 변화는 <b>서풍 편차 또는 무역풍 강화가 일정 시간 지속될 때 나타나는 대표적 반응</b>을 압축한 개념 모형입니다.</p>
+      </div>
+    </details>
+  </main>
+
+  <footer class="site-footer">
+    <p>카메라 영상과 손 좌표는 외부 서버에 저장하거나 전송하지 않습니다. MediaPipe 모델 파일과 실행 라이브러리는 앱 시작 시 네트워크에서 불러옵니다.</p>
+    <p>과학적 참고: NOAA의 ENSO 설명 자료 · 기술 구현: Google MediaPipe Hand Landmarker for Web</p>
+  </footer>
+
+  <noscript>이 웹앱을 실행하려면 브라우저에서 JavaScript를 허용해야 합니다.</noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
